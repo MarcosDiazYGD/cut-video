@@ -48,7 +48,7 @@ export default function VideoEditor() {
     fin: ''
   });
   const [currentSectionIndex, setCurrentSectionIndex] = useState<number>(0);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [playMode, setPlayMode] = useState<'original' | 'sections'>('original');
   const [timeError, setTimeError] = useState<{ inicio?: string; fin?: string }>({});
