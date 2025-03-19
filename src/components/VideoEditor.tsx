@@ -1,5 +1,9 @@
 import { useRef, useState, useEffect } from 'react';
-import { formatTime, parseTimeToSeconds, isValidTimeFormat } from '../utils/timeUtils';
+import {
+  formatTime,
+  parseTimeToSeconds,
+  isValidTimeFormat,
+} from '../utils/timeUtils';
 
 interface VideoSection {
   inicio: string;
@@ -9,30 +13,26 @@ interface VideoSection {
 interface TimeInputProps {
   inicio: string;
   fin: string;
-  onEdit: (type: 'inicio' | 'fin', value: string) => void;
+  onPlay: (inicio: string, fin: string) => void; // Nueva función para reproducir la selección
   onDelete: () => void;
 }
 
-function TimeInputRow({ inicio, fin, onEdit, onDelete }: TimeInputProps) {
+function TimeInputRow({ inicio, fin, onPlay, onDelete }: TimeInputProps) {
   return (
     <div className="flex items-center gap-2 bg-gray-800 rounded-lg p-3">
       <div className="flex-1 grid grid-cols-2 gap-2">
-        <div className="text-purple-300">
-          inicio: {inicio}
-        </div>
-        <div className="text-purple-300">
-          fin: {fin}
-        </div>
+        <div className="text-purple-300">Inicio: {inicio}</div>
+        <div className="text-purple-300">Fin: {fin}</div>
       </div>
       <button
-        onClick={() => onEdit('inicio', inicio)}
-        className="p-2 bg-gray-700 rounded hover:bg-gray-600"
+        onClick={() => onPlay(inicio, fin)} // Pasar inicio y fin al botón de reproducción
+        className="p-2 bg-green-500 rounded hover:bg-green-600"
       >
-        <span className="text-white">✎</span>
+        <span className="text-white">▶</span>
       </button>
       <button
         onClick={() => onDelete()}
-        className="p-2 bg-gray-700 rounded hover:bg-gray-600"
+        className="p-2 bg-red-500 rounded hover:bg-red-600"
       >
         <span className="text-white">✕</span>
       </button>
@@ -45,24 +45,29 @@ export default function VideoEditor() {
   const [sections, setSections] = useState<VideoSection[]>([]);
   const [currentSection, setCurrentSection] = useState<Partial<VideoSection>>({
     inicio: '',
-    fin: ''
+    fin: '',
   });
   const [currentSectionIndex, setCurrentSectionIndex] = useState<number>(0);
   const [, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [playMode, setPlayMode] = useState<'original' | 'sections'>('original');
-  const [timeError, setTimeError] = useState<{ inicio?: string; fin?: string }>({});
+  const [timeError, setTimeError] = useState<{ inicio?: string; fin?: string }>(
+    {}
+  );
 
   const handleTimeUpdate = () => {
-    if (!videoRef.current || sections.length === 0 || playMode === 'original') return;
+    if (!videoRef.current || sections.length === 0 || playMode === 'original')
+      return;
 
     const currentTime = videoRef.current.currentTime;
     const currentSec = sections[currentSectionIndex];
-    
+
     if (currentTime >= parseTimeToSeconds(currentSec.fin)) {
       if (currentSectionIndex < sections.length - 1) {
-        setCurrentSectionIndex(prev => prev + 1);
-        videoRef.current.currentTime = parseTimeToSeconds(sections[currentSectionIndex + 1].inicio);
+        setCurrentSectionIndex((prev) => prev + 1);
+        videoRef.current.currentTime = parseTimeToSeconds(
+          sections[currentSectionIndex + 1].inicio
+        );
       } else {
         setCurrentSectionIndex(0);
         videoRef.current.currentTime = parseTimeToSeconds(sections[0].inicio);
@@ -75,43 +80,84 @@ export default function VideoEditor() {
   const handleSetCurrentTime = (type: 'inicio' | 'fin') => {
     if (!videoRef.current) return;
     const currentTime = formatTime(Math.floor(videoRef.current.currentTime));
-    setCurrentSection(prev => ({
+    setCurrentSection((prev) => ({
       ...prev,
-      [type]: currentTime
+      [type]: currentTime,
     }));
-    setTimeError(prev => ({ ...prev, [type]: undefined }));
+    setTimeError((prev) => ({ ...prev, [type]: undefined }));
+  };
+
+  const formatInputTime = (value: string): string => {
+    // Elimina cualquier carácter no numérico
+    const numericValue = value.replace(/\D/g, '');
+
+    // Asegúrate de que no sea mayor a 4 dígitos
+    const paddedValue = numericValue.padStart(4, '0').slice(-4);
+
+    // Divide los últimos dos dígitos como segundos y los primeros como minutos
+    const minutes = paddedValue.slice(0, 2);
+    const seconds = paddedValue.slice(2);
+
+    return `${minutes}:${seconds}`;
   };
 
   const handleTimeInput = (type: 'inicio' | 'fin', value: string) => {
-    setCurrentSection(prev => ({
+    // Formatea el valor ingresado
+    const formattedValue = formatInputTime(value);
+
+    setCurrentSection((prev) => ({
       ...prev,
-      [type]: value
+      [type]: formattedValue,
     }));
 
-    if (value && !isValidTimeFormat(value)) {
-      setTimeError(prev => ({
+    // Validar el formato del tiempo
+    if (formattedValue && !isValidTimeFormat(formattedValue)) {
+      setTimeError((prev) => ({
         ...prev,
-        [type]: 'Formato inválido. Use mm:ss (ejemplo: 05:30)'
+        [type]: 'Formato inválido. Use mm:ss (ejemplo: 05:30)',
       }));
     } else {
-      setTimeError(prev => ({ ...prev, [type]: undefined }));
+      setTimeError((prev) => ({ ...prev, [type]: undefined }));
     }
   };
 
   const handleAddSection = () => {
     if (!currentSection.inicio || !currentSection.fin) return;
-    if (!isValidTimeFormat(currentSection.inicio) || !isValidTimeFormat(currentSection.fin)) return;
-    
-    setSections([...sections, currentSection as VideoSection]);
+    if (
+      !isValidTimeFormat(currentSection.inicio) ||
+      !isValidTimeFormat(currentSection.fin)
+    )
+      return;
+
+    const inicioInSeconds = parseTimeToSeconds(currentSection.inicio);
+    const finInSeconds = parseTimeToSeconds(currentSection.fin);
+
+    if (inicioInSeconds >= finInSeconds) {
+      alert('El tiempo inicial debe ser menor al tiempo final.');
+      return;
+    }
+
+    // Agregar la nueva sección y ordenar por tiempo de inicio
+    const updatedSections = [...sections, currentSection as VideoSection].sort(
+      (a, b) => parseTimeToSeconds(a.inicio) - parseTimeToSeconds(b.inicio)
+    );
+
+    setSections(updatedSections);
     setCurrentSection({ inicio: '', fin: '' });
     setTimeError({});
   };
 
   const handlePlaySections = () => {
     if (!videoRef.current || sections.length === 0) return;
-    
+
+    // Ordenar las secciones antes de reproducir
+    const sortedSections = [...sections].sort(
+      (a, b) => parseTimeToSeconds(a.inicio) - parseTimeToSeconds(b.inicio)
+    );
+    setSections(sortedSections);
+
     setCurrentSectionIndex(0);
-    videoRef.current.currentTime = parseTimeToSeconds(sections[0].inicio);
+    videoRef.current.currentTime = parseTimeToSeconds(sortedSections[0].inicio);
     videoRef.current.play();
     setIsPlaying(true);
   };
@@ -133,7 +179,7 @@ export default function VideoEditor() {
   };
 
   const togglePlayMode = () => {
-    setPlayMode(prev => prev === 'original' ? 'sections' : 'original');
+    setPlayMode((prev) => (prev === 'original' ? 'sections' : 'original'));
     if (videoRef.current) {
       videoRef.current.pause();
       setIsPlaying(false);
@@ -149,7 +195,7 @@ export default function VideoEditor() {
   }, [sections, currentSectionIndex, playMode]);
 
   return (
-    <div className="min-h-screen bg-gray-900 p-8">
+    <div className="min-h-screen bg-gray-900 p-8 flex items-center ">
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <div className="rounded-xl overflow-hidden bg-gray-800 p-4">
@@ -195,18 +241,24 @@ export default function VideoEditor() {
           <div className="bg-gray-700 rounded-lg p-4 mb-6">
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="block text-sm text-purple-300 mb-2">Inicio</label>
+                <label className="block text-sm text-purple-300 mb-2">
+                  Inicio
+                </label>
                 <div className="flex gap-2">
                   <div className="flex-1">
                     <input
                       type="text"
                       value={currentSection.inicio}
-                      onChange={(e) => handleTimeInput('inicio', e.target.value)}
+                      onChange={(e) =>
+                        handleTimeInput('inicio', e.target.value)
+                      }
                       className="w-full bg-gray-800 text-white px-3 py-2 rounded"
                       placeholder="00:00"
                     />
                     {timeError.inicio && (
-                      <p className="text-red-400 text-xs mt-1">{timeError.inicio}</p>
+                      <p className="text-red-400 text-xs mt-1">
+                        {timeError.inicio}
+                      </p>
                     )}
                   </div>
                   <button
@@ -218,7 +270,9 @@ export default function VideoEditor() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm text-purple-300 mb-2">Fin</label>
+                <label className="block text-sm text-purple-300 mb-2">
+                  Fin
+                </label>
                 <div className="flex gap-2">
                   <div className="flex-1">
                     <input
@@ -229,7 +283,9 @@ export default function VideoEditor() {
                       placeholder="00:00"
                     />
                     {timeError.fin && (
-                      <p className="text-red-400 text-xs mt-1">{timeError.fin}</p>
+                      <p className="text-red-400 text-xs mt-1">
+                        {timeError.fin}
+                      </p>
                     )}
                   </div>
                   <button
@@ -243,10 +299,14 @@ export default function VideoEditor() {
             </div>
             <button
               onClick={handleAddSection}
-              disabled={!currentSection.inicio || !currentSection.fin || Object.keys(timeError).length > 0}
+              disabled={
+                !currentSection.inicio ||
+                !currentSection.fin ||
+                Object.values(timeError).some((error) => error !== undefined) // Cambiado aquí
+              }
               className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-2 rounded"
             >
-              Add Section
+              Add selection
             </button>
           </div>
 
@@ -256,7 +316,30 @@ export default function VideoEditor() {
                 key={index}
                 inicio={section.inicio}
                 fin={section.fin}
-                onEdit={() => {}}
+                onPlay={(inicio, fin) => {
+                  if (!videoRef.current) return;
+
+                  videoRef.current.currentTime = parseTimeToSeconds(inicio);
+                  videoRef.current.play();
+
+                  const handleStopAtEnd = () => {
+                    if (
+                      videoRef.current &&
+                      videoRef.current.currentTime >= parseTimeToSeconds(fin)
+                    ) {
+                      videoRef.current.pause();
+                      videoRef.current.removeEventListener(
+                        'timeupdate',
+                        handleStopAtEnd
+                      );
+                    }
+                  };
+
+                  videoRef.current.addEventListener(
+                    'timeupdate',
+                    handleStopAtEnd
+                  );
+                }}
                 onDelete={() => handleRemoveSection(index)}
               />
             ))}
